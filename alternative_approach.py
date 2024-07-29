@@ -60,8 +60,8 @@ class ActivityTracker:
             if self.last_position:
                 dx, dy = x - self.last_position[0], y - self.last_position[1]
                 distance = (dx**2 + dy**2)**0.5
-                self.buffer[int(current_time - self.start_time)]['mouse_movement'] += 1
-                self.buffer[int(current_time - self.start_time)]['mouse_movement_distance'] += distance
+                self.buffer[int(current_time)]['mouse_movement'] += 1
+                self.buffer[int(current_time)]['mouse_movement_distance'] += distance
             self.last_position = (x, y)
             self.last_move_time = current_time
             self.flush_buffer()
@@ -69,15 +69,15 @@ class ActivityTracker:
     def on_click(self, x, y, button, pressed):
         if pressed:
             if button == pynput.mouse.Button.left:
-                self.buffer[int(time.time() - self.start_time)]['left_clicks'] += 1
+                self.buffer[int(time.time())]['left_clicks'] += 1
             elif button == pynput.mouse.Button.right:
-                self.buffer[int(time.time() - self.start_time)]['right_clicks'] += 1
+                self.buffer[int(time.time())]['right_clicks'] += 1
             elif button == pynput.mouse.Button.middle:
-                self.buffer[int(time.time() - self.start_time)]['middle_clicks'] += 1
+                self.buffer[int(time.time())]['middle_clicks'] += 1
             self.flush_buffer()
 
     def on_press(self, key):
-        self.buffer[int(time.time() - self.start_time)]['keypresses'] += 1
+        self.buffer[int(time.time())]['keypresses'] += 1
         self.flush_buffer()
 
     def start(self):
