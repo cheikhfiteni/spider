@@ -103,11 +103,12 @@ class ActivityTracker:
             }
         return formatted_data
 
-    def plot_data(self):
+    def plot_data(self, hours_ago: int = 24):
+        cutoff_start_time = int(time.time()) - hours_ago * 3600
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute('SELECT * FROM activity_data ORDER BY timestamp')
+            cursor.execute('SELECT * FROM activity_data WHERE timestamp >= ? ORDER BY timestamp', (cutoff_start_time,))
             data = cursor.fetchall()
 
         formatted_data = ActivityTracker.format_data(data)
@@ -143,4 +144,4 @@ if __name__ == "__main__":
     tracker.start()
     time.sleep(15) 
     tracker.stop()
-    tracker.plot_data()
+    tracker.plot_data(hours_ago=24)
