@@ -8,17 +8,18 @@ class ActivityTracker:
         self.mouse_listener = pynput.mouse.Listener(on_move=self.on_move, on_click=self.on_click)
         self.keyboard_listener = pynput.keyboard.Listener(on_press=self.on_press)
         self.start_time = time.time()
-        self.data = defaultdict(lambda: {'left_clicks': 0, 'right_clicks': 0, 'middle_clicks': 0, 'keypresses': 0, 'mouse_movement': 0})
+        self.data = defaultdict(lambda: {'left_clicks': 0, 'right_clicks': 0, 'middle_clicks': 0, 'keypresses': 0, 'mouse_movement': 0, 'mouse_movement_distance': 0,})
         self.last_position = None
         self.last_move_time = None
 
     def on_move(self, x, y):
         current_time = time.time()
-        if not hasattr(self, 'last_move_time') or current_time - self.last_move_time >= 0.5:
+        if self.last_move_time is None or current_time - self.last_move_time >= 0.5:
             if self.last_position:
                 dx, dy = x - self.last_position[0], y - self.last_position[1]
                 distance = (dx**2 + dy**2)**0.5
-                self.data[int(current_time - self.start_time)]['mouse_movement'] += distance
+                self.data[int(current_time - self.start_time)]['mouse_movement'] += 1
+                self.data[int(current_time - self.start_time)]['mouse_movement_distance'] += distance
             self.last_position = (x, y)
             self.last_move_time = current_time
 
@@ -60,7 +61,6 @@ class ActivityTracker:
         plt.ylabel('Count')
         plt.title('Mouse and Keyboard Activity')
         plt.legend()
-        plt.show()
 
         print(f"Total Left Clicks: {sum(left_clicks)}")
         print(f"Total Right Clicks: {sum(right_clicks)}")
@@ -68,9 +68,12 @@ class ActivityTracker:
         print(f"Total Keypresses: {sum(keypresses)}")
         print(f"Total Mouse Movement: {sum(mouse_movement):.2f} pixels")
 
+        plt.show()
+
+
 # Usage
 tracker = ActivityTracker()
 tracker.start()
-time.sleep(10)  # Run for 1 hour
+time.sleep(60)  # Run for 1 hour
 tracker.stop()
 tracker.plot_data()
