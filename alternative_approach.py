@@ -5,10 +5,22 @@ from collections import defaultdict
 from typing import List, Dict, Tuple
 import matplotlib.pyplot as plt
 
+import sys
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import QTimer
+import pyqtgraph as pg
+
 MOUSE_MOVE_DEBOUNCE_SECONDS = 0.5
 BUFFER_FLUSH_TIME_SECONDS = 1
-class ActivityTracker:
+class ActivityTracker(QtCore.QObject):
+    data_updated = QtCore.pyqtSignal(dict)
+
     def __init__(self, db_path='activity_tracker.db'):
+        super().__init__()
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.emit_update)
+        self.update_timer.start(1000)  # Update every second
+
         self.mouse_listener = pynput.mouse.Listener(on_move=self.on_move, on_click=self.on_click)
         self.keyboard_listener = pynput.keyboard.Listener(on_press=self.on_press)
         self.start_time = time.time()
@@ -19,6 +31,9 @@ class ActivityTracker:
         self.setup_database()
         self.buffer = defaultdict(lambda: {'left_clicks': 0, 'right_clicks': 0, 'middle_clicks': 0, 'keypresses': 0, 'mouse_movement': 0, 'mouse_movement_distance': 0,})
         self.last_flush_time = time.time()
+
+    def emit_update(self):
+        self.data_updated.emit(self.get_last_24h_data())
     
     def setup_database(self):
         with sqlite3.connect(self.db_path) as conn:
@@ -53,6 +68,7 @@ class ActivityTracker:
                           data['keypresses'], data['mouse_movement'], data['mouse_movement_distance']))
             self.buffer.clear()
             self.last_flush_time = current_time
+            self.data_updated.emit(self.get_last_24h_data())
 
     def on_move(self, x, y):
         current_time = time.time()
@@ -102,6 +118,14 @@ class ActivityTracker:
                 'mouse_movement_distance': mouse_movement_distance
             }
         return formatted_data
+    
+    def get_last_24h_data(self):
+        cutoff_start_time = int(time.time()) - 24 * 3600
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT * FROM activity_data WHERE timestamp >= ? ORDER BY timestamp', (cutoff_start_time,))
+            data = cursor.fetchall()
+        return ActivityTracker.format_data(data)
 
     def plot_data(self, hours_ago: int = 24):
         cutoff_start_time = int(time.time()) - hours_ago * 3600
@@ -138,10 +162,69 @@ class ActivityTracker:
 
         plt.show()
 
+class GraphWindow(QtWidgets.QMainWindow):
+    def __init__(self, tracker):
+        super().__init__()
+        self.tracker = tracker
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Activity Tracker')
+        self.setGeometry(100, 100, 800, 600)
+
+        central_widget = QtWidgets.QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QtWidgets.QVBoxLayout(central_widget)
+
+        self.graph_widget = pg.PlotWidget()
+        layout.addWidget(self.graph_widget)
+
+        self.tracker.data_updated.connect(self.update_graph)
+
+    def update_graph(self, data):
+        self.graph_widget.clear()
+        times = list(data.keys())
+        for key in ['left_clicks', 'right_clicks', 'middle_clicks', 'keypresses', 'mouse_movement']:
+            values = [d[key] for d in data.values()]
+            self.graph_widget.plot(times, values, pen=(255,0,0), name=key)
+
+class MenuBarIcon(QtWidgets.QSystemTrayIcon):
+    def __init__(self, tracker, parent=None):
+        icon = QtGui.QIcon("icons/spider.png")
+        super().__init__(icon, parent)
+        self.tracker = tracker
+
+        # Button Arrangement
+        self.setToolTip('Activity Tracker')
+        menu = QtWidgets.QMenu(parent)
+
+        open_action = menu.addAction("Open Graph")
+        open_action.triggered.connect(self.open_graph)
+
+        exit_action = menu.addAction("Exit")
+        exit_action.triggered.connect(QtWidgets.QApplication.quit)
+
+        self.setContextMenu(menu)
+        self.graph_window = None
+
+    def open_graph(self):
+        if self.graph_window is None:
+            self.graph_window = GraphWindow(tracker)
+        self.graph_window.show()
+
+
 # Usage
 if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+
     tracker = ActivityTracker()
     tracker.start()
-    time.sleep(15) 
-    tracker.stop()
-    tracker.plot_data(hours_ago=24)
+
+    # time.sleep(15) 
+    # tracker.stop()
+    # tracker.plot_data(hours_ago=24)
+
+    menu_bar_icon = MenuBarIcon(tracker)
+    menu_bar_icon.show()
+
+    sys.exit(app.exec_())
